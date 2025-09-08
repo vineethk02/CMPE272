@@ -1,0 +1,14 @@
+server {
+    listen 8080;
+    server_name _;
+
+    access_log /var/log/nginx/sjsu.access.log;
+    error_log  /var/log/nginx/sjsu.error.log;
+
+    root /var/www/sjsu;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}

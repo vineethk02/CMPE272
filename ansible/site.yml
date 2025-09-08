@@ -1,0 +1,91 @@
+---
+- name: Deploy nginx on port 8080 with Hello World page
+  hosts: webservers
+  become: yes
+  tags: ['deploy']
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install nginx
+      apt:
+        name: nginx
+        state: present
+
+    - name: Create web root
+      file:
+        path: /var/www/sjsu
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+
+    - name: Deploy index.html with custom message
+      template:
+        src: templates/index.html.j2
+        dest: /var/www/sjsu/index.html
+        owner: www-data
+        group: www-data
+        mode: '0644'
+
+    - name: Deploy nginx site config listening on 8080
+      template:
+        src: templates/sjsu.conf.j2
+        dest: /etc/nginx/sites-available/sjsu.conf
+        mode: '0644'
+
+    - name: Enable site
+      file:
+        src: /etc/nginx/sites-available/sjsu.conf
+        dest: /etc/nginx/sites-enabled/sjsu.conf
+        state: link
+        force: true
+
+    - name: Disable default site
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+
+    - name: Test nginx configuration
+      command: nginx -t
+      register: nginx_test
+      changed_when: false
+
+    - name: Restart nginx
+      service:
+        name: nginx
+        state: restarted
+        enabled: yes
+
+    - name: Allow TCP 8080 with ufw (ignore if ufw absent)
+      command: ufw allow 8080/tcp
+      register: ufw_result
+      failed_when: false
+      changed_when: "'added' in ufw_result.stdout or 'updated' in ufw_result.stdout"
+
+- name: Undeploy nginx site and clean files
+  hosts: webservers
+  become: yes
+  tags: ['undeploy']
+  tasks:
+    - name: Remove site symlink
+      file:
+        path: /etc/nginx/sites-enabled/sjsu.conf
+        state: absent
+
+    - name: Remove site config
+      file:
+        path: /etc/nginx/sites-available/sjsu.conf
+        state: absent
+
+    - name: Remove web root
+      file:
+        path: /var/www/sjsu
+        state: absent
+
+    - name: Reload nginx (ignore errors if not installed)
+      service:
+        name: nginx
+        state: reloaded
+      ignore_errors: yes
